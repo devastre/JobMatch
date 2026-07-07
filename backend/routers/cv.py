@@ -3,12 +3,13 @@ import re
 import shutil
 from pathlib import Path
 from uuid import uuid4
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from database import get_db
 from models import User, CV
-from schemas import CVResponse
+from schemas import CVResponse, CVUpdate
 from auth import get_current_user
+from cv_parser import process_cv
 
 router = APIRouter()
 
@@ -49,6 +50,7 @@ def get_file_size(file: UploadFile) -> int:
 
 @router.post("/upload", response_model=CVResponse)
 def upload_cv(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -97,4 +99,24 @@ def upload_cv(
     db.commit()
     db.refresh(new_cv)
     
+    background_tasks.add_task(process_cv, new_cv.id, str(file_location), db)
+    
     return new_cv
+
+@router.get("/{cv_id}", response_model=CVResponse)
+def get_cv(cv_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    cv = db.query(CV).filter(CV.id == cv_id, CV.user_id == current_user.id).first()
+    if not cv:
+        raise HTTPException(status_code=404, detail="CV not found")
+    return cv
+
+@router.put("/{cv_id}", response_model=CVResponse)
+def update_cv(cv_id: int, cv_update: CVUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    cv = db.query(CV).filter(CV.id == cv_id, CV.user_id == current_user.id).first()
+    if not cv:
+        raise HTTPException(status_code=404, detail="CV not found")
+    
+    cv.parsed_json = cv_update.parsed_json
+    db.commit()
+    db.refresh(cv)
+    return cv
