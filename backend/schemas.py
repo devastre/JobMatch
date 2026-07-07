@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -27,6 +27,11 @@ class CVResponse(BaseModel):
     file_url: str
     status: str
     created_at: datetime
+    parsed_json: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
+
+class CVUpdate(BaseModel):
+    parsed_json: Optional[Dict[str, Any]] = None
+    status: Optional[str] = None
