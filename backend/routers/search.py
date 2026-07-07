@@ -1,34 +1,59 @@
 import uuid
 import asyncio
+import urllib.request
+import urllib.error
+import json
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import SessionLocal, get_db
 from models import CV, Match
 from schemas import SearchRequest
+from matching import calculate_match_score
 
 router = APIRouter()
 
 search_jobs: Dict[str, Dict[str, Any]] = {}
 
 async def process_search(search_id: str, cv_id: int):
-    await asyncio.sleep(2)
-    
     db = SessionLocal()
     try:
-        matches = db.query(Match).filter(Match.cv_id == cv_id).all()
+        cv = db.query(CV).filter(CV.id == cv_id).first()
+        if not cv:
+            raise Exception("CV not found")
+            
+        url = "https://www.themuse.com/api/public/jobs?page=1"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json.loads(response.read().decode())
+        except urllib.error.URLError as e:
+            raise Exception(f"External API failed or timed out: {str(e)}")
+            
+        jobs_data = data.get("results", [])
         
         results = []
-        for match in matches:
-            job = match.job_offer
-            results.append({
-                "id": job.id,
-                "title": job.title,
-                "company": job.company,
-                "location": job.location,
-                "score": match.score
-            })
+        cv_text = cv.parsed_json.get("raw_text", "") if cv.parsed_json else ""
+        cv_skills = cv.parsed_json.get("skills", []) if cv.parsed_json else []
         
+        for job in jobs_data:
+            job_desc = job.get("contents", "")
+            job_title = job.get("name", "")
+            company = job.get("company", {}).get("name", "")
+            locations = job.get("locations", [])
+            location = locations[0].get("name", "") if locations else "Remote"
+            
+            match_info = calculate_match_score(cv_text, job_desc, cv_skills)
+            
+            results.append({
+                "id": str(job.get("id")),
+                "title": job_title,
+                "company": company,
+                "location": location,
+                "score": match_info["score"],
+                "keywords": match_info["matched_keywords"]
+            })
+                
         results.sort(key=lambda x: x["score"], reverse=True)
         
         search_jobs[search_id]["status"] = "completed"
@@ -62,7 +87,8 @@ async def get_search_results(search_id: str, location: Optional[str] = None):
         return {"status": "pending"}
         
     if job["status"] == "failed":
-        raise HTTPException(status_code=500, detail="Search job failed")
+        error_msg = job.get("error", "Search job failed")
+        raise HTTPException(status_code=500, detail=error_msg)
         
     results = job["results"]
     
