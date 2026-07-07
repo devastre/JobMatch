@@ -5,6 +5,7 @@ export default function Home() {
   const [status, setStatus] = useState(''); // 'pending', 'done', 'error'
   const [jobs, setJobs] = useState([]);
   const [locationFilter, setLocationFilter] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const fileInputRef = useRef(null);
 
   const handleDragOver = (e) => {
@@ -27,31 +28,79 @@ export default function Home() {
   const uploadCV = async () => {
     if (!file) return;
     setStatus('pending');
+    setErrorMessage('');
     
-    // Simulate upload
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Simulate polling for parsing and searching
-    const pollInterval = setInterval(() => {
-      const random = Math.random();
-      if (random > 0.7) {
-        clearInterval(pollInterval);
-        setStatus('done');
-        setJobs([
-          { id: 1, title: 'Frontend Developer', location: 'New York', score: 95, keywords: ['React', 'JavaScript'] },
-          { id: 2, title: 'Backend Developer', location: 'San Francisco', score: 80, keywords: ['Node.js'] },
-          { id: 3, title: 'Fullstack Engineer', location: 'New York', score: 88, keywords: ['React', 'Node.js'] },
-          { id: 4, title: 'UI/UX Designer', location: 'Remote', score: 45, keywords: ['Figma'] }
-        ]);
-      } else if (random < 0.1) {
-        clearInterval(pollInterval);
-        setStatus('error');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const token = localStorage.getItem('token') || '';
+      
+      const uploadRes = await fetch('http://localhost:8000/api/cv/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+      
+      if (!uploadRes.ok) {
+        const errData = await uploadRes.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Upload failed');
       }
-    }, 1000);
+      const cvData = await uploadRes.json();
+      
+      const searchRes = await fetch('http://localhost:8000/api/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ cv_id: cvData.id })
+      });
+      
+      if (!searchRes.ok) {
+        const errData = await searchRes.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Search failed');
+      }
+      const searchData = await searchRes.json();
+      
+      const pollInterval = setInterval(async () => {
+        try {
+          const res = await fetch(`http://localhost:8000/api/search/${searchData.search_id}/results`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'completed') {
+              clearInterval(pollInterval);
+              setStatus('done');
+              setJobs(data.results);
+            } else if (data.status === 'failed') {
+              clearInterval(pollInterval);
+              setStatus('error');
+              setErrorMessage(data.error || 'Search failed');
+            }
+          } else {
+            const errorData = await res.json().catch(() => ({}));
+            clearInterval(pollInterval);
+            setStatus('error');
+            setErrorMessage(errorData.detail || 'Search failed');
+          }
+        } catch (err) {
+          clearInterval(pollInterval);
+          setStatus('error');
+          setErrorMessage(err.message || 'Network error during polling');
+        }
+      }, 2000);
+      
+    } catch (error) {
+      console.error(error);
+      setStatus('error');
+      setErrorMessage(error.message || 'An unexpected error occurred');
+    }
   };
 
   const filteredJobs = jobs
-    .filter(job => job.location.toLowerCase().includes(locationFilter.toLowerCase()))
+    .filter(job => job.location && job.location.toLowerCase().includes(locationFilter.toLowerCase()))
     .sort((a, b) => b.score - a.score);
 
   return (
@@ -97,6 +146,12 @@ export default function Home() {
         </span>
       </div>
 
+      {status === 'error' && errorMessage && (
+        <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#ffebee', color: '#c62828', borderRadius: '4px' }}>
+          <strong>Error:</strong> {errorMessage}
+        </div>
+      )}
+
       {status === 'done' && (
         <div style={{ marginTop: '2rem' }}>
           <h2>Matched Job Offers</h2>
@@ -112,8 +167,9 @@ export default function Home() {
             {filteredJobs.map(job => (
               <div key={job.id} style={{ border: '1px solid #eee', padding: '1rem', borderRadius: '8px' }}>
                 <h3 style={{ margin: '0 0 0.5rem 0' }}>{job.title} - {job.location}</h3>
+                <p style={{ margin: '0 0 0.5rem 0' }}><strong>Company:</strong> {job.company}</p>
                 <p style={{ margin: '0 0 0.5rem 0' }}><strong>Score:</strong> {job.score}%</p>
-                <p style={{ margin: 0 }}><strong>Matched Keywords:</strong> {job.keywords.join(', ')}</p>
+                <p style={{ margin: 0 }}><strong>Matched Keywords:</strong> {job.keywords ? job.keywords.join(', ') : 'None'}</p>
               </div>
             ))}
             {filteredJobs.length === 0 && <p>No jobs found for this location.</p>}
