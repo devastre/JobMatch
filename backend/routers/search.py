@@ -42,6 +42,7 @@ async def process_search(search_id: str, cv_id: int):
             company = job.get("company", {}).get("name", "")
             locations = job.get("locations", [])
             location = locations[0].get("name", "") if locations else "Remote"
+            job_url = job.get("refs", {}).get("landing_page", "")
             
             match_info = calculate_match_score(cv_text, job_desc, cv_skills)
             
@@ -50,6 +51,7 @@ async def process_search(search_id: str, cv_id: int):
                 "title": job_title,
                 "company": company,
                 "location": location,
+                "url": job_url,
                 "score": match_info["score"],
                 "keywords": match_info["matched_keywords"]
             })

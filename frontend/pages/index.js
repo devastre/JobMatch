@@ -317,8 +317,13 @@ export default function Home() {
                 <h3 style={{ margin: '0 0 0.5rem 0' }}>{job.title} - {job.location}</h3>
                 <p style={{ margin: '0 0 0.5rem 0' }}><strong>Company:</strong> {job.company}</p>
                 <p style={{ margin: '0 0 0.5rem 0' }}><strong>Score:</strong> {job.score}%</p>
-                <p style={{ margin: 0 }}><strong>Matched Keywords:</strong> {job.keywords ? job.keywords.join(', ') : 'None'}</p>
-              </a>
+                <p style={{ margin: '0 0 0.5rem 0' }}><strong>Matched Keywords:</strong> {job.keywords ? job.keywords.join(', ') : 'None'}</p>
+                {job.url && (
+                  <a href={job.url} target="_blank" rel="noopener noreferrer" style={{ color: '#0066cc', textDecoration: 'none', fontWeight: 'bold' }}>
+                    View Original Posting
+                  </a>
+                )}
+              </div>
             ))}
             {filteredJobs.length === 0 && <p>No jobs found for this location.</p>}
           </div>
