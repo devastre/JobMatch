@@ -26,6 +26,7 @@ class CVResponse(BaseModel):
     user_id: int
     file_url: str
     status: str
+    parsed_json: Optional[Dict[str, Any]] = None
     created_at: datetime
     parsed_json: Optional[Dict[str, Any]] = None
 
@@ -33,5 +34,9 @@ class CVResponse(BaseModel):
         from_attributes = True
 
 class CVUpdate(BaseModel):
+<<<<<<< HEAD
+    parsed_json: Dict[str, Any]
+=======
     parsed_json: Optional[Dict[str, Any]] = None
     status: Optional[str] = None
+>>>>>>> origin/main
