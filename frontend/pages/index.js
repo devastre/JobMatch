@@ -4,10 +4,13 @@ import { useRouter } from 'next/router';
 export default function Home() {
   const router = useRouter();
   const [file, setFile] = useState(null);
-  const [status, setStatus] = useState(''); // 'pending', 'done', 'error'
+  const [status, setStatus] = useState(''); // 'pending', 'parsing', 'review', 'searching', 'done', 'error'
+  const [cvData, setCvData] = useState(null);
+  const [parsedData, setParsedData] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [locationFilter, setLocationFilter] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -41,6 +44,7 @@ export default function Home() {
     if (!file) return;
     setStatus('pending');
     setErrorMessage('');
+    setSuccessMessage('');
     
     try {
       const formData = new FormData();
@@ -60,8 +64,71 @@ export default function Home() {
         const errData = await uploadRes.json().catch(() => ({}));
         throw new Error(errData.detail || 'Upload failed');
       }
-      const cvData = await uploadRes.json();
+      const uploadedCv = await uploadRes.json();
+      setCvData(uploadedCv);
+      setStatus('parsing');
+
+      // Poll for parsing completion
+      const pollInterval = setInterval(async () => {
+        try {
+          const res = await fetch(`http://localhost:8001/api/cv/${uploadedCv.id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'completed') {
+              clearInterval(pollInterval);
+              setParsedData(data.parsed_json || {});
+              setStatus('review');
+            } else if (data.status === 'error') {
+              clearInterval(pollInterval);
+              setStatus('error');
+              setErrorMessage(data.parsed_json?.error || 'Parsing failed');
+            }
+          } else {
+            const errorData = await res.json().catch(() => ({}));
+            clearInterval(pollInterval);
+            setStatus('error');
+            setErrorMessage(errorData.detail || 'Failed to fetch CV status');
+          }
+        } catch (err) {
+          clearInterval(pollInterval);
+          setStatus('error');
+          setErrorMessage(err.message || 'Network error during polling');
+        }
+      }, 2000);
       
+    } catch (error) {
+      console.error(error);
+      setStatus('error');
+      setErrorMessage(error.message || 'An unexpected error occurred');
+    }
+  };
+
+  const handleUpdateCV = async () => {
+    setStatus('searching');
+    setErrorMessage('');
+    setSuccessMessage('');
+    const token = localStorage.getItem('token') || '';
+
+    try {
+      const updateRes = await fetch(`http://localhost:8001/api/cv/${cvData.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ parsed_json: parsedData })
+      });
+
+      if (!updateRes.ok) {
+        const errData = await updateRes.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Update failed');
+      }
+
+      setSuccessMessage('CV updated successfully!');
+
+      // Start search
       const searchRes = await fetch('http://localhost:8001/api/search', {
         method: 'POST',
         headers: {
@@ -103,12 +170,16 @@ export default function Home() {
           setErrorMessage(err.message || 'Network error during polling');
         }
       }, 2000);
-      
+
     } catch (error) {
       console.error(error);
       setStatus('error');
       setErrorMessage(error.message || 'An unexpected error occurred');
     }
+  };
+
+  const handleArrayChange = (field, value) => {
+    setParsedData({ ...parsedData, [field]: value.split(',').map(s => s.trim()).filter(Boolean) });
   };
 
   const filteredJobs = jobs
@@ -148,24 +219,78 @@ export default function Home() {
       
       <button 
         onClick={(e) => { e.stopPropagation(); uploadCV(); }} 
-        disabled={!file || status === 'pending'}
+        disabled={!file || status === 'pending' || status === 'parsing' || status === 'searching'}
         style={{ padding: '0.5rem 1rem', fontSize: '1rem', cursor: 'pointer' }}
       >
-        Upload & Match
+        Upload & Parse
       </button>
 
       <div style={{ marginTop: '1rem' }}>
         <strong>Status: </strong>
         <span style={{
-          color: status === 'pending' ? 'orange' : status === 'done' ? 'green' : status === 'error' ? 'red' : 'black'
+          color: (status === 'pending' || status === 'parsing' || status === 'searching') ? 'orange' : status === 'done' ? 'green' : status === 'error' ? 'red' : 'black'
         }}>
           {status || 'Waiting for upload'}
         </span>
       </div>
 
+      {successMessage && (
+        <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#e8f5e9', color: '#2e7d32', borderRadius: '4px' }}>
+          <strong>Success:</strong> {successMessage}
+        </div>
+      )}
+
       {status === 'error' && errorMessage && (
         <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#ffebee', color: '#c62828', borderRadius: '4px' }}>
           <strong>Error:</strong> {errorMessage}
+        </div>
+      )}
+
+      {status === 'review' && parsedData && (
+        <div style={{ marginTop: '2rem', padding: '1rem', border: '1px solid #ccc', borderRadius: '8px' }}>
+          <h2>Review Parsed CV Data</h2>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Skills (comma separated)</label>
+            <input 
+              type="text" 
+              value={(parsedData.skills || []).join(', ')} 
+              onChange={(e) => handleArrayChange('skills', e.target.value)}
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Titles (comma separated)</label>
+            <input 
+              type="text" 
+              value={(parsedData.titles || []).join(', ')} 
+              onChange={(e) => handleArrayChange('titles', e.target.value)}
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Languages (comma separated)</label>
+            <input 
+              type="text" 
+              value={(parsedData.languages || []).join(', ')} 
+              onChange={(e) => handleArrayChange('languages', e.target.value)}
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Years of Experience</label>
+            <input 
+              type="number" 
+              value={parsedData.years_experience || 0} 
+              onChange={(e) => setParsedData({ ...parsedData, years_experience: parseInt(e.target.value) || 0 })}
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+          </div>
+          <button 
+            onClick={handleUpdateCV} 
+            style={{ padding: '0.5rem 1rem', fontSize: '1rem', cursor: 'pointer', backgroundColor: '#4caf50', color: 'white', border: 'none', borderRadius: '4px' }}
+          >
+            Save & Search Jobs
+          </button>
         </div>
       )}
 
@@ -182,7 +307,13 @@ export default function Home() {
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {filteredJobs.map(job => (
-              <div key={job.id} style={{ border: '1px solid #eee', padding: '1rem', borderRadius: '8px' }}>
+              <a 
+                key={job.id} 
+                href={job.url} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                style={{ border: '1px solid #eee', padding: '1rem', borderRadius: '8px', textDecoration: 'none', color: 'inherit', display: 'block' }}
+              >
                 <h3 style={{ margin: '0 0 0.5rem 0' }}>{job.title} - {job.location}</h3>
                 <p style={{ margin: '0 0 0.5rem 0' }}><strong>Company:</strong> {job.company}</p>
                 <p style={{ margin: '0 0 0.5rem 0' }}><strong>Score:</strong> {job.score}%</p>

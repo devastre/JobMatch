@@ -3,12 +3,18 @@ import re
 import shutil
 from pathlib import Path
 from uuid import uuid4
+<<<<<<< HEAD
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, BackgroundTasks
+=======
+from typing import List
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+>>>>>>> origin/main
 from sqlalchemy.orm import Session
 from database import get_db
 from models import User, CV
-from schemas import CVResponse
+from schemas import CVResponse, CVUpdate
 from auth import get_current_user
+from cv_parser import process_cv
 
 router = APIRouter()
 
@@ -49,6 +55,7 @@ def get_file_size(file: UploadFile) -> int:
 
 @router.post("/upload", response_model=CVResponse)
 def upload_cv(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -97,4 +104,62 @@ def upload_cv(
     db.commit()
     db.refresh(new_cv)
     
+    background_tasks.add_task(process_cv, new_cv.id, str(file_location), db)
+    
     return new_cv
+
+<<<<<<< HEAD
+@router.get("/{cv_id}", response_model=CVResponse)
+def get_cv(cv_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    cv = db.query(CV).filter(CV.id == cv_id, CV.user_id == current_user.id).first()
+    if not cv:
+        raise HTTPException(status_code=404, detail="CV not found")
+    return cv
+
+@router.put("/{cv_id}", response_model=CVResponse)
+def update_cv(cv_id: int, cv_update: CVUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    cv = db.query(CV).filter(CV.id == cv_id, CV.user_id == current_user.id).first()
+    if not cv:
+        raise HTTPException(status_code=404, detail="CV not found")
+    
+    cv.parsed_json = cv_update.parsed_json
+=======
+@router.get("/", response_model=List[CVResponse])
+def get_cvs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    cvs = db.query(CV).filter(CV.user_id == current_user.id).all()
+    return cvs
+
+@router.get("/{cv_id}", response_model=CVResponse)
+def get_cv(
+    cv_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    cv = db.query(CV).filter(CV.id == cv_id, CV.user_id == current_user.id).first()
+    if not cv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found")
+    return cv
+
+@router.patch("/{cv_id}", response_model=CVResponse)
+def update_cv(
+    cv_id: int,
+    cv_update: CVUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    cv = db.query(CV).filter(CV.id == cv_id, CV.user_id == current_user.id).first()
+    if not cv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found")
+    
+    if cv_update.parsed_json is not None:
+        cv.parsed_json = cv_update.parsed_json
+    if cv_update.status is not None:
+        cv.status = cv_update.status
+        
+>>>>>>> origin/main
+    db.commit()
+    db.refresh(cv)
+    return cv
