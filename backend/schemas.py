@@ -20,3 +20,13 @@ class Token(BaseModel):
 
 class SearchRequest(BaseModel):
     cv_id: int
+
+class CVResponse(BaseModel):
+    id: int
+    user_id: int
+    file_url: str
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
