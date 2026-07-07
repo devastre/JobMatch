@@ -18,6 +18,9 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+class SearchRequest(BaseModel):
+    cv_id: int
+
 class CVResponse(BaseModel):
     id: int
     user_id: int
