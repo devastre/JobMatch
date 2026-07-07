@@ -75,15 +75,22 @@ def upload_cv(
             detail="Uploaded file content does not match its extension.",
         )
 
-    safe_filename = sanitize_filename(file.filename)
-    file_location = os.path.join(UPLOAD_DIR, f"{current_user.id}_{uuid4().hex}_{safe_filename}")
-    
-    with open(file_location, "wb+") as file_object:
-        shutil.copyfileobj(file.file, file_object)
+    safe_filename = Path(sanitize_filename(file.filename)).name
+    file_location = Path(UPLOAD_DIR) / f"{current_user.id}_{uuid4().hex}_{safe_filename}"
+
+    try:
+        with file_location.open("wb+") as file_object:
+            shutil.copyfileobj(file.file, file_object)
+    except OSError:
+        file_location.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to store uploaded file.",
+        )
         
     new_cv = CV(
         user_id=current_user.id,
-        file_url=file_location,
+        file_url=str(file_location),
         status="pending"
     )
     db.add(new_cv)

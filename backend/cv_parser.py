@@ -8,6 +8,7 @@ from models import CV
 
 logger = logging.getLogger(__name__)
 MAX_EDUCATION_ENTRIES = 5
+CV_PROCESSING_ERROR_MESSAGE = "CV processing failed."
 
 def extract_text_from_pdf(file_path: str) -> str:
     text = ""
@@ -27,10 +28,10 @@ def extract_text_from_pdf(file_path: str) -> str:
             for image in images:
                 text += pytesseract.image_to_string(image) + "\n"
         except Exception as e:
-            raise Exception(f"OCR fallback failed: {str(e)}")
+            raise RuntimeError("OCR fallback failed.") from e
             
     if not text.strip():
-        raise Exception("Could not extract text from PDF.")
+        raise RuntimeError("Could not extract text from PDF.")
         
     return text
 
@@ -114,5 +115,6 @@ def process_cv(cv_id: int, file_path: str, db: Session):
     except Exception as e:
         db.rollback()
         cv.status = "error"
-        cv.parsed_json = {"error": str(e)}
+        logger.exception("CV processing failed for cv_id=%s", cv_id)
+        cv.parsed_json = {"error": CV_PROCESSING_ERROR_MESSAGE}
         db.commit()
