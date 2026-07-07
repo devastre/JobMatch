@@ -307,12 +307,18 @@ export default function Home() {
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {filteredJobs.map(job => (
-              <div key={job.id} style={{ border: '1px solid #eee', padding: '1rem', borderRadius: '8px' }}>
+              <a 
+                key={job.id} 
+                href={job.url} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                style={{ border: '1px solid #eee', padding: '1rem', borderRadius: '8px', textDecoration: 'none', color: 'inherit', display: 'block' }}
+              >
                 <h3 style={{ margin: '0 0 0.5rem 0' }}>{job.title} - {job.location}</h3>
                 <p style={{ margin: '0 0 0.5rem 0' }}><strong>Company:</strong> {job.company}</p>
                 <p style={{ margin: '0 0 0.5rem 0' }}><strong>Score:</strong> {job.score}%</p>
                 <p style={{ margin: 0 }}><strong>Matched Keywords:</strong> {job.keywords ? job.keywords.join(', ') : 'None'}</p>
-              </div>
+              </a>
             ))}
             {filteredJobs.length === 0 && <p>No jobs found for this location.</p>}
           </div>
