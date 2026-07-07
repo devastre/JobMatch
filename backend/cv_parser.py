@@ -1,10 +1,13 @@
+import logging
 import pdfplumber
 import pytesseract
 from pdf2image import convert_from_path
 import re
-import traceback
 from sqlalchemy.orm import Session
 from models import CV
+
+logger = logging.getLogger(__name__)
+MAX_EDUCATION_ENTRIES = 5
 
 def extract_text_from_pdf(file_path: str) -> str:
     text = ""
@@ -14,8 +17,8 @@ def extract_text_from_pdf(file_path: str) -> str:
                 page_text = page.extract_text()
                 if page_text:
                     text += page_text + "\n"
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("PDF text extraction failed for %s: %s", file_path, exc)
     
     # Fallback to OCR if no text extracted (scanned PDF)
     if not text.strip():
@@ -89,7 +92,7 @@ def parse_cv_text(text: str) -> dict:
         "titles": extracted_titles,
         "years_experience": years_experience,
         "languages": extracted_languages,
-        "education": list(set(extracted_education))[:5],
+        "education": list(set(extracted_education))[:MAX_EDUCATION_ENTRIES],
         "raw_text": text
     }
 
@@ -111,5 +114,5 @@ def process_cv(cv_id: int, file_path: str, db: Session):
     except Exception as e:
         db.rollback()
         cv.status = "error"
-        cv.parsed_json = {"error": str(e), "diagnostic": traceback.format_exc()}
+        cv.parsed_json = {"error": str(e)}
         db.commit()

@@ -3,6 +3,8 @@ from typing import List, Dict, Any
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+SKILL_MATCH_BONUS = 5.0
+
 def preprocess_text(text: str) -> str:
     if not text:
         return ""
@@ -40,7 +42,7 @@ def calculate_match_score(cv_text: str, job_text: str, cv_skills: List[str]) -> 
             
         if processed_skill in processed_job:
             matched_keywords.append(skill)
-            skill_boost += 5.0
+            skill_boost += SKILL_MATCH_BONUS
 
     final_score = min(100.0, base_score + skill_boost)
 
