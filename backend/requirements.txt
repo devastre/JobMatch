@@ -8,3 +8,6 @@ passlib[bcrypt]
 pydantic
 pydantic-settings
 python-multipart
+pdfplumber
+pytesseract
+pdf2image
