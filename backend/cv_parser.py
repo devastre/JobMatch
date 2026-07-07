@@ -88,12 +88,14 @@ def parse_cv_text(text: str) -> dict:
         except ValueError:
             pass
             
+    unique_education = list(dict.fromkeys(extracted_education))
+
     return {
         "skills": extracted_skills,
         "titles": extracted_titles,
         "years_experience": years_experience,
         "languages": extracted_languages,
-        "education": list(set(extracted_education))[:MAX_EDUCATION_ENTRIES],
+        "education": unique_education[:MAX_EDUCATION_ENTRIES],
         "raw_text": text
     }
 

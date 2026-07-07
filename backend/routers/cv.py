@@ -75,7 +75,7 @@ def upload_cv(
             detail="Uploaded file content does not match its extension.",
         )
 
-    safe_filename = Path(sanitize_filename(file.filename)).name
+    safe_filename = sanitize_filename(file.filename)
     file_location = Path(UPLOAD_DIR) / f"{current_user.id}_{uuid4().hex}_{safe_filename}"
 
     try:
