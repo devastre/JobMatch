@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-jobmatch}
     ports:
-      - "5435:5432"
+      - "5435:5435"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -33,7 +33,7 @@ services:
     build:
       context: ./backend
     ports:
-      - "8000:8000"
+      - "8001:8001"
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-jobmatch}
       - REDIS_URL=redis://redis:6379/0
@@ -46,15 +46,16 @@ services:
       - db
       - redis
       - minio
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 
   frontend:
     build:
       context: ./frontend
     ports:
-      - "3000:3000"
+      - "3010:3010"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
+      - PORT=3010
 
 volumes:
   postgres_data:

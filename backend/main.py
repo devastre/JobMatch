@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import auth, cv, search
 from database import engine, Base
+import models  # noqa: F401 — ensures all models are registered before create_all
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="JobMatch API",

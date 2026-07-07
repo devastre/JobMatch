@@ -1,12 +1,24 @@
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/router';
 
 export default function Home() {
+  const router = useRouter();
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState(''); // 'pending', 'done', 'error'
   const [jobs, setJobs] = useState([]);
   const [locationFilter, setLocationFilter] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) router.push('/login');
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    router.push('/login');
+  };
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -36,7 +48,7 @@ export default function Home() {
       
       const token = localStorage.getItem('token') || '';
       
-      const uploadRes = await fetch('http://localhost:8000/api/cv/upload', {
+      const uploadRes = await fetch('http://localhost:8001/api/cv/upload', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -50,7 +62,7 @@ export default function Home() {
       }
       const cvData = await uploadRes.json();
       
-      const searchRes = await fetch('http://localhost:8000/api/search', {
+      const searchRes = await fetch('http://localhost:8001/api/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -67,7 +79,7 @@ export default function Home() {
       
       const pollInterval = setInterval(async () => {
         try {
-          const res = await fetch(`http://localhost:8000/api/search/${searchData.search_id}/results`);
+          const res = await fetch(`http://localhost:8001/api/search/${searchData.search_id}/results`);
           if (res.ok) {
             const data = await res.json();
             if (data.status === 'completed') {
@@ -105,7 +117,12 @@ export default function Home() {
 
   return (
     <div style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '800px', margin: '0 auto' }}>
-      <h1>JobMatch Dashboard</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h1 style={{ margin: 0 }}>JobMatch Dashboard</h1>
+        <button onClick={handleLogout} style={{ padding: '0.4rem 1rem', cursor: 'pointer', backgroundColor: '#e53935', color: 'white', border: 'none', borderRadius: '4px' }}>
+          Logout
+        </button>
+      </div>
       
       <div 
         onDragOver={handleDragOver} 
