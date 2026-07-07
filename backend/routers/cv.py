@@ -2,6 +2,7 @@ import os
 import re
 import shutil
 from pathlib import Path
+from uuid import uuid4
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
@@ -16,6 +17,7 @@ ALLOWED_EXTENSIONS = (".pdf", ".doc", ".docx")
 DOC_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 DOCX_SIGNATURE = b"PK"
 PDF_SIGNATURE = b"%PDF"
+MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -38,6 +40,13 @@ def has_allowed_signature(file: UploadFile, extension: str) -> bool:
         return signature.startswith(DOCX_SIGNATURE)
     return False
 
+
+def get_file_size(file: UploadFile) -> int:
+    file.file.seek(0, os.SEEK_END)
+    size = file.file.tell()
+    file.file.seek(0)
+    return size
+
 @router.post("/upload", response_model=CVResponse)
 def upload_cv(
     file: UploadFile = File(...),
@@ -45,17 +54,29 @@ def upload_cv(
     current_user: User = Depends(get_current_user)
 ):
     if not file.filename:
-        raise HTTPException(status_code=400, detail="Filename is required.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required.")
 
     extension = os.path.splitext(file.filename)[1].lower()
     if extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOC, and DOCX are allowed.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Only PDF, DOC, and DOCX are allowed.",
+        )
+
+    if get_file_size(file) > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File is too large. Maximum allowed size is 10 MB.",
+        )
 
     if not has_allowed_signature(file, extension):
-        raise HTTPException(status_code=400, detail="Uploaded file content does not match its extension.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file content does not match its extension.",
+        )
 
     safe_filename = sanitize_filename(file.filename)
-    file_location = os.path.join(UPLOAD_DIR, f"{current_user.id}_{safe_filename}")
+    file_location = os.path.join(UPLOAD_DIR, f"{current_user.id}_{uuid4().hex}_{safe_filename}")
     
     with open(file_location, "wb+") as file_object:
         shutil.copyfileobj(file.file, file_object)
